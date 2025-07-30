@@ -1,160 +1,71 @@
-# lab6
+# MobileCLIP 环境配置与算法分析报告
 
-COMP2011 Lab6
-Responsive image
-Number Tower from THOSE GAMES
-"Those games" you've seen in ads and want to play before.
+## 一、配置注意事项总结
 
-Introduction
-Welcome to Lab 6! In this lab, you will be provided with the Number Tower from "those games" in C++ code. Your objective is to write a recursive function to find the path to win the game.
+- **操作系统兼容性**  
+  Windows 直接安装易触发版本依赖错误，**推荐 Linux 或 WSL** 环境，Python 版本需为 3.10 [2,6](@ref)。
 
-In Number Tower, your goal is to boost your number, also known as strength, to defeat all the monsters. You have to visit every tower, and you must complete every floor of a tower before moving on to the next tower. On each floor, your strength will be boosted or shrunk depending on what you encounter. There is a boss in the last tower, so choose your path wisely to gain as much strength as possible to defeat the boss! The following is a clip of a game showcase:
+- **源码编译关键步骤**  
+  1. `git clone` 后需手动切换至指定分支  
+  2. **强制打 Patch** 避免训练阶段函数缺失报错  
+  3. 初始化子模块：
+ 
+  - **数据格式要求**  
+- 默认训练脚本依赖 **WebDataset 格式**（需预打包为 `.tar` 文件）  
+- 使用 `ImageFolder` 格式需重写 `dataloader` 逻辑 [6](@ref)。
 
-Tasks
-Start your coding with the skeleton code: lab6.cpp and main.cpp (last modified 21 Oct 7.27pm). Download both files and place them in the same directory. You only need to modify lab6.cpp.
+- **分布式训练优化**  
+- 多 GPU 训练推荐 **`torchrun`**（优于 `python -m torch.distributed`）  
+- 本地资源不足时：  
+- 调小 `batch_size`（≤32）  
+- 启用混合精度：`--precision amp` 降低显存消耗 [6](@ref)。
 
-Your task is to complete the recursive function with a helper function in lab6.cpp that finds and returns a path to win the game given the stage.
+---
 
-main.cpp contains the game code that calls your implementation in lab6.cpp, so please DO NOT modify main.cpp.
+## 二、MobileCLIP 算法核心分析
 
-The following lecture notes may be useful for this lab:
+### 2.1 核心机制概述
+- **轻量化架构设计**  
+- 图像编码器：**MobileNetV3 / MobileViT** 替代原始 CLIP 的 ViT  
+- 文本编码器：引入 **Text-RepMixer**（卷积 token 混合器），支持结构重参数化提升推理效率 [1,6](@ref)。
 
-Array
-Function II: Recursion
-Separate Compilation
-Each stage is represented as a 2D array of C strings.
+- **多层次蒸馏策略**  
+- **输出层 + 中间特征 + 注意力分布 + 投影层** 联合蒸馏  
+- 教师模型：冻结的 **CLIP 预训练语义空间**（保障跨模态对齐能力）  
+- 投影层：**图文共享**的 projection head，节省参数并强化模态对齐 [6](@ref)。
 
-The first dimension is the tower number, with a maximum of 4.
-The second dimension is the floor number, with a maximum of 4. You can assume that all towers have the same number of floors.
-The C string represents the monster or item you encounter, indicated by an operator followed by a number (an integer).
-'+' and '*' are for addition and multiplication (boost items).
-'-' and '/' are for subtraction and integer division (debuffs). You will be knocked out immediately if your strength is non-positive after the encounter.
-'M' represents the monster encounter.
-The number represents the strength of the monster.
-You obtain the strength of the monster if you have higher strength than the monster.
-Otherwise, you will be knocked out immediately (your strength becomes -1).
-An example stage is:
+### 2.2 训练策略与优化技巧
+- **数据增强与训练优化**  
+- 引入 **Mixup / CutMix** 提升泛化性  
+- 大 Batch 训练抑制过拟合  
+- **EMA（指数移动平均）** 稳定教师模型权重，避免蒸馏漂移 [6](@ref)。
 
-char stage[4][4][20] = {
-    {"+5","*2","M10"},
-    {"-8","/2","M28"}
-};
-In this stage, there are 2 towers.
+- **多教师增强对齐**  
+部分实现采用 **dual-teacher 机制**（图像 & 文本独立教师），强化多模态融合效果 [1](@ref)。
 
-In the 1st tower, the encounters from Floor 0 to Floor 3 are: +5, *2, and a monster with strength 10.
-In the 2nd tower, the encounters from Floor 0 to Floor 3 are: -8, /2, and a monster with strength 28.
-Say your initial strength is 7. A path that leads to a win is [0, 2, 1], [0, 2, 1], getting you a strength of 44 after the first tower and a strength of 32 after the second tower.
+- **灵活架构支持**  
+训练 pipeline 支持 **MobileViT / ConvNeXt 等 Backbone 自由替换**，适配性强 [6](@ref)。
 
-Complete the following functions in the provided code:
+### 2.3 算法设计亮点
+- **零样本推理兼容性**  
+完全兼容 CLIP 的 **zero-shot 评估接口**（ImageNet/MSCOCO/Flickr30k 等基准直接可用）[1,6](@ref)。
 
-calculate_strength(): The helper function that returns the strength after the encounter.
-find_path(): The recursive function that
-Finds the path that leads to a win.
-"Returns" the path by overwriting elements in the input parameter stage_path.
-Returns the strength after taking the path.
-You only need to complete the 2 base cases and 4 lines of code (look for TODO) for the recursive case.
-You can find the details in the comments in the provided code.
-Sample Output
-We have provided 3 test cases for you in the skeleton code. They will be run consecutively when you run the program.
+- **工程部署友好性**  
+- 支持 **WebDataset 格式** + **DDP 分布式训练**，扩展性强  
+- 模型经 **结构重参数化优化**，显著降低移动端延迟（e.g. MobileCLIP-S0 比 ViT-B/16 快 5 倍）[1,6](@ref)。
 
-Place lab6.cpp and main.cpp in the same directory. Open the terminal in the directory.
+- **效率与精度平衡**  
+**多模态强化训练**策略提升学习效率：  
+- ImageNet 数据效率提升 **100 倍**  
+- Flickr30k 迭代效率提升 **18 倍**  
+（对比非强化 CLIP 训练）[1,6](@ref)。
 
-Run this code to compile your code:
+---
 
-g++ -std=c++11 main.cpp lab6.cpp -o lab6
-Run the executable:
+## 三、总结
+MobileCLIP 通过三重革新实现轻量化：  
+1. **架构革新** - MobileNetV3/MobileViT 替代 ViT，Text-RepMixer 优化文本编码  
+2. **训练革新** - 多层次蒸馏 + EMA 稳定 + 多教师对齐  
+3. **部署革新** - 结构重参数化 + WebDataset/DDP 支持  
 
-./lab6.exe
-If you implement the function correctly, you should see "Congrats! You won!" for all test cases. For example:
-
-Test case 0:
-Your final decision: ((0 2 1), (0 2 1))
-You are now in tower 0
-Your strength = 5. You decide to go to floor 0 with +5
-Your strength now is 10.
-Your strength = 10. You decide to go to floor 2 with M10
-Your strength now is 20.
-Your strength = 20. You decide to go to floor 1 with *2
-Your strength now is 40.
-You are now in tower 1
-Your strength = 40. You decide to go to floor 0 with -8
-Your strength now is 32.
-Your strength = 32. You decide to go to floor 2 with M28
-Your strength now is 60.
-Your strength = 60. You decide to go to floor 1 with /2
-Your strength now is 30.
-Congrats! You won!
-
-Test case 1:
-Your final decision: ((0 3 2 1), (0 1 2 3), (1 2 0 3))
-You are now in tower 0
-Your strength = 5. You decide to go to floor 0 with +15
-Your strength now is 20.
-Your strength = 20. You decide to go to floor 3 with M20
-Your strength now is 40.
-Your strength = 40. You decide to go to floor 2 with *3
-Your strength now is 120.
-Your strength = 120. You decide to go to floor 1 with -5
-Your strength now is 115.
-You are now in tower 1
-Your strength = 115. You decide to go to floor 0 with -10
-Your strength now is 105.
-Your strength = 105. You decide to go to floor 1 with /3
-Your strength now is 35.
-Your strength = 35. You decide to go to floor 2 with M20
-Your strength now is 55.
-Your strength = 55. You decide to go to floor 3 with M40
-Your strength now is 95.
-You are now in tower 2
-Your strength = 95. You decide to go to floor 1 with -80
-Your strength now is 15.
-Your strength = 15. You decide to go to floor 2 with /5
-Your strength now is 3.
-Your strength = 3. You decide to go to floor 0 with +10
-Your strength now is 13.
-Your strength = 13. You decide to go to floor 3 with M10
-Your strength now is 23.
-Congrats! You won!
-
-Test case 2:
-Your final decision: ((0 1), (0 1), (0 1), (1 0))
-You are now in tower 0
-Your strength = 5. You decide to go to floor 0 with +8
-Your strength now is 13.
-Your strength = 13. You decide to go to floor 1 with M12
-Your strength now is 25.
-You are now in tower 1
-Your strength = 25. You decide to go to floor 0 with +5
-Your strength now is 30.
-Your strength = 30. You decide to go to floor 1 with *2
-Your strength now is 60.
-You are now in tower 2
-Your strength = 60. You decide to go to floor 0 with /2
-Your strength now is 30.
-Your strength = 30. You decide to go to floor 1 with M18
-Your strength now is 48.
-You are now in tower 3
-Your strength = 48. You decide to go to floor 1 with M25
-Your strength now is 73.
-Your strength = 73. You decide to go to floor 0 with -25
-Your strength now is 48.
-Congrats! You won!
-Your algorithm should be able to provide an optimal solution if implemented correctly, even though the winning path might not be unique.
-
-As long as you have non-negative strength at the end, it is considered a win. The following is a path demonstrating a loss:
-
-Test case 0:
-Your final decision: ((0 1 2), (0 2 1))
-You are now in tower 0
-Your strength = 5. You decide to go to floor 0 with +5
-Your strength now is 10.
-Your strength = 10. You decide to go to floor 1 with *2
-Your strength now is 20.
-Your strength = 20. You decide to go to floor 2 with M10
-Your strength now is 30.
-You are now in tower 1
-Your strength = 30. You decide to go to floor 0 with -8
-Your strength now is 22.
-Your strength = 22. You decide to go to floor 2 with M28
-Your strength now is -1.
-You lose D:
+其 **“轻量架构 + 深度蒸馏 + 无缝部署”** 范式，在移动端实现了 CLIP 级语义能力与低延迟的平衡，是轻量多模态模型的工程实践典范 [1,6](@ref).
