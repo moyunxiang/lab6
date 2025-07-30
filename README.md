@@ -1,5 +1,5 @@
 # MobileCLIP 环境配置与算法分析报告
-# 莫云翔 7.30
+## 莫云翔 7.30
 
 ## 第一部分：配置注意事项总结
 
@@ -37,21 +37,21 @@
 
 ### 二、训练策略与优化技巧  
 **Dual-Teacher 策略**  
-部分实现中，除了图像教师（如 ViT-B），还使用语言教师（如 BERT 或 CLIP Text Encoder）辅助蒸馏，提升跨模态学习能力。  
+部分实现中，除了图像教师（ViT-B），还使用语言教师（BERT ，CLIP Text Encoder）辅助蒸馏，提升跨模态学习能力。  
 **训练使用大 batch + Mixup / CutMix**  
-提升泛化性，防止轻量网络在小 batch 下过拟合。尤其 Mixup 在多模态任务中效果比预期更好，可能是因为类间模糊能加强“语义空间对齐”。  
-**采用 EMA（Exponential Moving Average）更新教师参数**  
+提升泛化性，防止轻量网络在小 batch 下过拟合。Mixup 在多模态任务中效果比预期更好，因为类间模糊能加强“语义空间对齐”。  
+**采用EMA更新教师参数**  
 通过滑动平均更新 teacher 参数，提高稳定性，防止训练过程教师模型漂移太快。  
 
 ---
 
 ### 三、算法设计亮点  
 **结构可调式解耦**  
-MobileCLIP 并不强耦合特定模型结构，而是提供一个蒸馏 pipeline。MobileViT、EfficientNet、ConvNeXt 都可作为 backbone 插拔替换。  
+MobileCLIP 提供一个蒸馏 pipeline。MobileViT、EfficientNet、ConvNeXt 都可作为 backbone 插拔替换。  
 **兼容 zero-shot 评估机制**  
-设计过程中保持与 CLIP 的 zero-shot 推理接口一致，这使得它可以直接在 ImageNet/A/Sketch 等 benchmark 上测试，不需专门适配。  
+设计过程中保持与 CLIP 的 zero-shot 推理接口一致，使它可以直接在 ImageNet/A/Sketch 等 benchmark 上测试。  
 **支持通用 WebDataset 输入格式**  
-用 WebDataset + DDP 可高效分布式训练，为大规模训练（即使是轻模型）提供流畅的数据吞吐管道。  
+用 WebDataset + DDP 可高效分布式训练，为大规模训练提供流畅的数据吞吐管道。  
 
 ---
 
